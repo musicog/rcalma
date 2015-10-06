@@ -2,7 +2,7 @@ library("RCurl")
 library("SPARQL")
 library("rrdf")
 library("ggplot2")
-setwd("/home/davidw/CALMA/temp")
+setwd(tempdir())
 endpoint = "http://etree.linkedmusic.org/sparql"
 
 etreeTrackQuery <- "
