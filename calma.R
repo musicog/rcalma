@@ -58,8 +58,6 @@ graphify <- function(files, remote=TRUE) {
     if(remote){ # need to write to our local tmp folder
       track <- files[f]
       track <- regmatches(track, gregexpr(pattern = "track_[^/]*", track))[[1]]
-     # contextualizedData <- gsub(pattern = "<#>", replacement = paste0("<", track, ">"), x=data[f])
-      #cat(x=contextualizedData, file=files[f], append=FALSE)
       cat(x=data[f], file=files[f], append=FALSE)
     }
     thisg = load.rdf(filename = files[f], format="TURTLE")
