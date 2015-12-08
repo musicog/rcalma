@@ -15,18 +15,22 @@ PREFIX rdf:<http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX calma:<http://calma.linkedmusic.org/vocab/>
 SELECT ?track ?calma
 {
-    BIND(<http://etree.linkedmusic.org/performance/alo2004-07-16> as ?performance) .
+    BIND(<http://etree.linkedmusic.org/artist/422feb50-4aac-012f-19e9-00254bd44c28> as ?artist) .
+    ?artist mo:performed ?performance .
     ?performance event:hasSubEvent ?track .
-    ?track calma:data ?calma .
+    ?track calma:data ?calma ;
+        skos:prefLabel \"Happier\" .
 }
 ORDER BY ?calma
+LIMIT 100
 "
-calmaFileQuery <- "
+
+whatFeaturesQuery <- "
 prefix prov: <http://www.w3.org/ns/prov#> 
-select distinct ?file where { 
-   ?file prov:wasAssociatedWith <http://vamp-plugins.org/rdf/plugins/qm-vamp-plugins#qm-tempotracker_output_tempo>
+select distinct ?feature where { 
+   ?file prov:wasAssociatedWith ?feature
 }
-ORDER BY ?file"
+ORDER BY ?feature"
 
 calmaFeatureQuery <- "
 PREFIX af: <http://purl.org/ontology/af/>
@@ -40,7 +44,6 @@ select ?event ?feature where {
          af:feature ?feature .
 }
 ORDER BY ?file"
-
 
 graphify <- function(files, remote=TRUE) { 
   if(remote) { 
@@ -86,6 +89,17 @@ untarBlobs <- function(blobURIs) {
   return(tmp)
 }
 
+queryFeatureFiles <- function(g, feature) { 
+  calmaFileQuery <- paste0("
+  prefix prov: <http://www.w3.org/ns/prov#> 
+  select distinct ?file where { 
+     ?file prov:wasAssociatedWith <", feature, ">
+  }
+  ORDER BY ?file")
+  files <- sparql.rdf(g, calmaFileQuery)
+  return (files)
+}
+
 result <- SPARQL(endpoint, etreeTrackQuery)$results
 # chop off the <'s and >'s 
 calma <- substr(result$calma, 2, nchar(result$calma))
@@ -95,7 +109,11 @@ calma <- paste0(calma, "/")
 files <- paste0(calma, "analyses.ttl")
 etreeCalma <- cbind(result, files)
 g <- graphify(files)
-featurefiles <- sparql.rdf(g, calmaFileQuery)
+
+# What features are available for these files?
+features <- sparql.rdf(g, whatFeaturesQuery)
+
+featurefiles <- queryFeatureFiles(g, features[18])
 g <- graphify(featurefiles)
 etreeCalma <- cbind(etreeCalma, featurefiles)
 names(etreeCalma) <- c("etree", "calma", "analysis.ttl", "feature")
@@ -113,12 +131,14 @@ featureData$track <- factor((gsub(".*/([^/#]+)#.*", "\\1", as.character(featureD
 featureData$eventNum <- as.numeric(gsub(".*event_(\\d+)", "\\1", featureData$event,fixed=FALSE, perl=TRUE))
 featureData$feature <- as.numeric(as.character(featureData$feature))
 featureData <- unique(featureData[order(featureData$track, featureData$eventNum),])
-ggplot(featureData, aes(eventNum, feature)) + geom_line(aes(color=track)) + facet_wrap(~track) + theme_bw() 
+ggplot(featureData, aes(track, feature)) + geom_boxplot() + theme_bw() + 
+  theme(axis.text.x = element_text(angle=90))
+#ggplot(featureData, aes(eventNum, feature)) + geom_line(aes(color=track)) + facet_wrap(~track) + theme_bw() 
 
 
 
 
-
+ 
 
 
 
