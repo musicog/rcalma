@@ -2,11 +2,12 @@ library("RCurl")
 library("SPARQL")
 library("rrdf")
 library("ggplot2")
-library("magrittr")
 library("dplyr")
+library("magrittr")
+
 setwd(tempdir())
 #following line: see http://www.bramschoenmakers.nl/en/node/726
-options( java.parameters = "-Xmx3g" )
+#options( java.parameters = "-Xmx3g" )
 endpoint = "http://etree.linkedmusic.org/sparql"
 
 etreeTrackQuery <- "
@@ -19,20 +20,20 @@ PREFIX rdf:<http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX calma:<http://calma.linkedmusic.org/vocab/>
 SELECT ?track ?calma
 {
-  BIND(<http://etree.linkedmusic.org/artist/422feb50-4aac-012f-19e9-00254bd44c28> as ?artist) .
-  ?artist mo:performed ?performance .
-  ?performance event:hasSubEvent ?track .
-  ?track calma:data ?calma ;
-  skos:prefLabel \"The Captain\" .
+    BIND(<http://etree.linkedmusic.org/artist/422feb50-4aac-012f-19e9-00254bd44c28> as ?artist) .
+    ?artist mo:performed ?performance .
+    ?performance event:hasSubEvent ?track .
+    ?track calma:data ?calma ;
+        skos:prefLabel \"The Captain\" .
 }
 ORDER BY ?calma
-LIMIT 102
+LIMIT 100
 "
 
 whatFeaturesQuery <- "
 prefix prov: <http://www.w3.org/ns/prov#> 
 select distinct ?feature where { 
-?file prov:wasAssociatedWith ?feature
+   ?file prov:wasAssociatedWith ?feature
 }
 ORDER BY ?feature"
 
@@ -43,11 +44,13 @@ PREFIX event: <http://purl.org/NET/c4dm/event.owl#>
 PREFIX tl: <http://purl.org/NET/c4dm/timeline.owl#> 
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 
-select distinct ?event ?chord ?onsetTime where { 
-?event a af:ChordSegment ;
-event:time ?time ;
-rdfs:label ?chord .
-?time tl:at ?onsetTime .
+select distinct ?event ?feature ?key ?onsetTime where { 
+#  ?event a af:Tempo;
+  ?event a af:KeyChange ;
+         event:time ?time ;
+         af:feature ?feature ;
+         rdfs:label ?key .
+  ?time tl:at ?onsetTime .
 }
 ORDER BY ?event"
 
@@ -88,20 +91,20 @@ untarBlobs <- function(blobURIs) {
   files <- paste0(tmp, "/", list.files(tmp))
   print("---------------------")
   for (f in 1:length(files)) { 
-    contextualized <- gsub("<#>", paste0("<", files[f], "#>"), readLines(files[f]))
-    cat(x = contextualized, file=files[f], append = FALSE)
+      contextualized <- gsub("<#>", paste0("<", files[f], "#>"), readLines(files[f]))
+      cat(x = contextualized, file=files[f], append = FALSE)
     
-  }
+    }
   return(tmp)
 }
 
 queryFeatureFiles <- function(g, feature) { 
   calmaFileQuery <- paste0("
-                           prefix prov: <http://www.w3.org/ns/prov#> 
-                           select distinct ?file where { 
-                           ?file prov:wasAssociatedWith <", feature, ">
-                           }
-                           ORDER BY ?file")
+  prefix prov: <http://www.w3.org/ns/prov#> 
+  select distinct ?file where { 
+     ?file prov:wasAssociatedWith <", feature, ">
+  }
+  ORDER BY ?file")
   files <- sparql.rdf(g, calmaFileQuery)
   return (files)
 }
@@ -135,9 +138,8 @@ g <- graphify(files)
 # What features are available for these files?
 features <- sparql.rdf(g, whatFeaturesQuery)
 
-#featurefiles <- queryFeatureFiles(g, features[18]) # tempo
-#featurefiles <- queryFeatureFiles(g, features[9]) # key
-featurefiles <- queryFeatureFiles(g, features[5]) # simple chord
+#featurefiles <- queryFeatureFiles(g, features[18])
+featurefiles <- queryFeatureFiles(g, features[9])
 g <- graphify(featurefiles)
 etreeCalma <- cbind(etreeCalma, featurefiles)
 names(etreeCalma) <- c("etree", "calma", "analysis.ttl", "feature")
@@ -145,55 +147,43 @@ etreeCalma$etree <- factor(etreeCalma$etree)
 etreeCalma$calma<- factor(etreeCalma$calma)
 
 query = "select distinct ?blob where { 
-?s <http://calma.linkedmusic.org/vocab/feature_blob> ?blob 
-}
-ORDER BY ?blob"
+    ?s <http://calma.linkedmusic.org/vocab/feature_blob> ?blob 
+  }
+  ORDER BY ?blob"
 blobFileURIs <- sparql.rdf(g, query)
 blobFileDir <- untarBlobs(blobFileURIs)
 featureGraph <- graphify(blobFileDir, remote=FALSE)
 summarize.rdf(featureGraph)
 
 featureData <- as.data.frame(sparql.rdf(featureGraph, calmaFeatureQuery))
-#featureData$track <- factor((gsub(".*/([^/#]+)#.*", "\\1", as.character(featureData$event),fixed=FALSE, perl=TRUE)))
+#featureData$track <- factor((gsub(".*/([^/#]+).*$", "\\1", as.character(featureData$event),fixed=FALSE, perl=TRUE)))
 featureData$track <- factor((gsub(".*/([^/#]+)\\.wav.*$", "\\1", as.character(featureData$event),fixed=FALSE, perl=TRUE)))
 featureData$eventNum <- as.numeric(gsub(".*event_(\\d+)", "\\1", as.character(featureData$event),fixed=FALSE, perl=TRUE))
+featureData$feature <- as.numeric(as.character(featureData$feature))
 featureData$onsetTime <- as.numeric(gsub("[PTS]", "", as.character(featureData$onsetTime), fixed=FALSE, perl=TRUE))
 featureData <- unique(featureData[order(featureData$track, featureData$eventNum),])
 featureData <- calculateEventDurations(featureData)
 
-featureData <- select(featureData, chord, track, duration) %>%
-  group_by(track, chord) %>%
-  filter(chord != "N") %>% # remove NA's
-  summarise(duration = sum(duration, na.rm=TRUE))
 
-featureData <- inner_join(featureData, select(featureData, track, duration) %>%
-                            group_by(track) %>%
-                            summarise(track_duration = sum(duration, na.rm=TRUE)))
+featureData <- select(featureData, key, track, duration) %>%
+  group_by(track, key) %>%
+  filter(key != "N") %>% # remove NA's
+  summarise(key_duration = sum(duration, na.rm=TRUE))
 
-ggplot(featureData, aes(chord, duration)) + geom_bar(stat="identity") + facet_wrap(~track, ncol=5) + theme_bw() + 
-  #geom_text(data=chordmappings, aes(feature, 0, label=chord, angle=90), color="#aaaaaa", hjust=0, size=2) + 
-  geom_text(aes(chord, duration + 20, label = chord, size = 4*log(duration/track_duration)), color="#aaaaaa") +
-  labs(x="Feature (chord)", y = "Total duration (seconds)") + scale_y_continuous(breaks=seq(0,230,50)) +
-  theme(text = element_text(size = 10)) + 
-  guides(size = FALSE)
+featureData <- inner_join(featureData, select(featureData, track, key_duration) %>%
+                           group_by(track) %>%
+                           summarise(key_track_duration = sum(key_duration, na.rm=TRUE)))
 
 
-#----scratch-----#
-
-allData <- merge(chordData, keyData, by="track")
-
-ggplot(allData, aes(chord, chord_duration)) + geom_bar(stat="identity") + facet_wrap(~track, ncol=5) + theme_bw() + 
-  #geom_text(data=chordmappings, aes(feature, 0, label=chord, angle=90), color="#aaaaaa", hjust=0, size=2) + 
-  geom_text(aes(chord, chord_duration + 20, label = chord, size = 4*log(chord_duration/chord_track_duration)), color="#aaaaaa") +
-  labs(x="Feature (chord)", y = "Total duration (seconds)") + scale_y_continuous(breaks=seq(0,230,50)) +
-  theme(text = element_text(size = 10)) + 
-  guides(size = FALSE)
-
-ggplot(allData, aes(key, key_duration)) + geom_bar(stat="identity") + facet_wrap(~track, ncol=5) + theme_bw() + 
+ggplot(featureData, aes(key, key_duration)) + geom_bar(stat="identity") + facet_wrap(~track) + theme_bw() + 
   #geom_text(data=keymappings, aes(feature, 0, label=key, angle=90), color="#aaaaaa", hjust=0, size=2) + 
-  geom_text(aes(key, key_duration + 20, label = key, size = 4*log(key_duration/key_track_duration)), color="#aaaaaa") +
+  geom_text(aes(key, key_duration + 5, label = key, size = 4*log(key_duration/key_track_duration)), color="#aaaaaa") +
   labs(x="Feature (Key)", y = "Total duration (seconds)") + scale_y_continuous(breaks=seq(0,300,50)) +
   theme(text = element_text(size = 10)) + 
   guides(size = FALSE)
 
+
+
+ 
+#----scratch-----#
 
