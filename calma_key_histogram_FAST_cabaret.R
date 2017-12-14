@@ -201,8 +201,6 @@ featureData <- inner_join(featureData, select(featureData, track, key_duration) 
                             summarise(track_duration = sum(key_duration, na.rm=TRUE)))
 
 
-
-
 corpusScore <- group_by(featureData, key) %>%
   summarise(key_corpus_duration = sum(key_duration)) %>%
   ungroup() %>%
@@ -224,15 +222,20 @@ corpusScore$normalised_key_corpus_prop <- corpusScore$key_corpus_proportion / ma
 keyScore <- inner_join(featureData, corpusScore, by="key") %>%
   mutate(track_key_score = (key_duration / track_duration) * key_corpus_proportion) %>%
   mutate(normalised_track_key_score = (key_duration / track_duration) * normalised_key_corpus_prop) %>%
-  summarise(key_score = sum(track_key_score), normalised_key_score = sum(normalised_track_key_score))
+  summarise(key_score = sum(track_key_score), normalised_key_score = sum(normalised_track_key_score)) 
 
 # order tracks by key score
 keyScore <- keyScore[order(desc(keyScore$key_score)),]
 featureData$track <- factor(featureData$track, levels = keyScore$track)
 
+# add font size relative to duration in key per track
+featureData <- featureData %>% 
+    group_by(track, key) %>% 
+    mutate(fontSize = min(6, 10*(key_duration/track_duration))) 
+
 ggplot(featureData, aes(key, key_duration)) + geom_bar(stat="identity") + facet_wrap(~track) + theme_bw() +
   #geom_text(data=keymappings, aes(feature, 0, label=key, angle=90), color="#aaaaaa", hjust=0, size=2) +
-  geom_text(aes(key, key_duration + 5, label = key, size = 4*log(key_duration/track_duration)), color="#aaaaaa") +
+  geom_text(data=featureData, aes(key, key_duration + 5, label=key, size=5+fontSize), color="#aaaaaa") +
   geom_text(data=keyScore, aes(5, 200, label=round(normalised_key_score, digits = 2)), color="red") +
   labs(x="Feature (Key). Normalised key typicality score in red.", y = "Total duration (seconds)") + scale_y_continuous(breaks=seq(0,300,50)) +
   theme(text = element_text(size = 10), axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
