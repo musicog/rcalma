@@ -11,5 +11,5 @@ Run the following in your R session:
     # ONLY NEED TO DO THIS BEFORE THE FIRST USE OF THE SCRIPT
     install.packages(c("RCurl", "SPARQL", "ggplot2", "rJava", "devtools"))
     library("devtools")
-    install_github("egonw/rrdf", subdir="rrdf", buld_vignettes= FALSE)
+    install_github("egonw/rrdf", subdir="rrdf", build_vignettes= FALSE)
     install_github("egonw/rrdf", subdir="rrdflibs")
