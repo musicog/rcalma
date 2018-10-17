@@ -295,20 +295,3 @@ p <- ggplot(featureDataKeyScore, aes(key, key_duration)) +
   guides(size = FALSE)
 
 ggsave(file="foo.svg", plot=p, width=20, height=12)
-
-#----scratch-----#
-
-#every_third_track <- keyScore[seq(1,110,3),c("track")]$track
-#every_third_track <- every_third_track[-37]
-
-#forty_tracks <- keyScore[floor(seq(1,110, length.out = 40)),]$track
-
-#ggplot(featureData[featureData$track %in% forty_tracks,], aes(key, key_duration)) + geom_bar(stat="identity") + facet_wrap(~track, ncol=5) + theme_bw() +
-  #geom_text(data=keymappings, aes(feature, 0, label=key, angle=90), color="#aaaaaa", hjust=0, size=2) +
-#  geom_text(aes(key, key_duration + 25, label = key, size = (key_duration/track_duration)*.5), color="#aaaaaa") +
-#  geom_text(data=keyScore[keyScore$track %in% forty_tracks,], aes(23.5, 228, label=round(normalised_key_score, digits = 2)), color="red") +
-#  labs(x="Key detected", y = "Duration (seconds)") + scale_y_continuous(breaks=seq(0,300,50), limits = c(0,250)) +
-#  theme(text = element_text(size = 13), axis.text.x = element_blank(), axis.ticks.x = element_blank(), strip.text=element_blank(), strip.background=element_blank()) +
-#  guides(size = FALSE)
-
-
