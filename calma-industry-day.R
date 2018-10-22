@@ -16,7 +16,9 @@ setwd(tempdir())
 #options( java.parameters = "-Xmx3g" )
 endpoint = "http://etree.linkedmusic.org/sparql"
 
-etreeTrackQuery <- "
+numTracksLimit <- 50
+
+etreeTrackQuery <- paste0("
 PREFIX etree:<http://etree.linkedmusic.org/vocab/>
 PREFIX mo:<http://purl.org/ontology/mo/>
 PREFIX event:<http://purl.org/NET/c4dm/event.owl#>
@@ -30,11 +32,12 @@ SELECT ?track ?calma
   ?artist mo:performed ?performance .
   ?performance event:hasSubEvent ?track .
   ?track calma:data ?calma ;
-  skos:prefLabel \"Today\" .
+    etree:audio ?audioFile ;
+    skos:prefLabel \"Today\" .
+  FILTER(STRENDS(STR(?audioFile), '.flac')) .
 }
 ORDER BY ?calma
-LIMIT 100
-"
+LIMIT ", numTracksLimit)
 
 whatFeaturesQuery <- "
 prefix prov: <http://www.w3.org/ns/prov#>
@@ -62,6 +65,7 @@ rdfs:label ?key .
 ?sigTime tl:onTimeLine ?tl .
 ?audioFile a mo:AudioFile ; 
   mo:encodes ?sig .
+FILTER(STRENDS(STR(?audioFile), '.flac')) .
 }
 ORDER BY ?event"
 
@@ -290,8 +294,44 @@ p <- ggplot(featureDataKeyScore, aes(key, key_duration)) +
   geom_text(data=featureDataKeyScore, aes(key, key_duration + 5, label=key, size=5+fontSize), color="#aaaaaa") +
   geom_text(data=keyScore, aes(5, 200, label=round(normalised_key_score, digits = 2)), color="red") + 
   geom_label(data=etreeLabels, aes(25, 150, label=label), hjust=1, lineheight=.8, size=2.5, alpha=.3, color="red") + 
-  labs(x="Feature (Key). Normalised key typicality score in red.", y = "Total duration (seconds)") + scale_y_continuous(breaks=seq(1,300,50)) +
+  labs(x="Feature (Key). Normalised key typicality score in red.", y = "Total duration (seconds)") + scale_y_continuous(breaks=seq(0,300,50)) +
   theme(text = element_text(size = 10), axis.text.x = element_blank(), axis.ticks.x = element_blank(), strip.text = element_blank()) +
-  guides(size = FALSE)
+  guides(size = FALSE)  
 
-ggsave(file="foo.svg", plot=p, width=20, height=12)
+ggsave(file="rcalma.svg", plot=p, width=20, height=12)
+
+# notes on preparing the output svg for javascripting in a browser:
+# to isolate only the svg rects corresponding to each etree track graph (run over file e.g. in vim):
+# s/\(<\/defs>\n<rect\)/\1 class="candidate"/g
+
+# the order of rects is a matrix transpose of the order of tracks in the svg 
+# so, we need to reorder:
+
+rankedEtree <- featureDataKeyScore %>% 
+  select(etree, audioFile, label, normalised_key_score) %>% 
+  unique %>% 
+  arrange(desc(normalised_key_score)) %>% 
+  select(etree, audioFile, label) %>% 
+  mutate(position = row_number())
+
+# and extract the list of etree tracks (now in right order to match svg rects)
+rankedEtree$transposed <- as.vector(t(matrix(seq(1:numTracksLimit), ncol=10)))
+
+etreeForSvg <- rankedEtree %>% 
+  arrange(transposed) %>%
+  select(etree)
+
+audioForSvg <- rankedEtree %>%
+  arrange(transposed) %>%
+  select(audioFile)
+
+labelForSvg <- rankedEtree %>%
+  arrange(transposed) %>%
+  select(label)
+
+options(tibble.print_max = 100)
+paste0("'", etreeForSvg$etree, "',", collapse = "")
+paste0("'", audioForSvg$audioFile, "',", collapse = "")
+paste0("'", str_replace_all(str_replace_all(str_replace_all(labelForSvg$label, "'", "\'"), '"', '\"'), " @", ","), "',", collapse = "")
+# 
+      
