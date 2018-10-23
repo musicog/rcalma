@@ -16,7 +16,7 @@ setwd(tempdir())
 #options( java.parameters = "-Xmx3g" )
 endpoint = "http://etree.linkedmusic.org/sparql"
 
-numTracksLimit <- 50
+numTracksLimit <- 100
 
 etreeTrackQuery <- paste0("
 PREFIX etree:<http://etree.linkedmusic.org/vocab/>
@@ -288,17 +288,23 @@ etreeLabels <- featureDataKeyScore %>%
     unique %>%
     mutate(label = str_replace(label, " @ ", "\n"))
 
-p <- ggplot(featureDataKeyScore, aes(key, key_duration)) + 
-  geom_bar(data=featureDataKeyScore, stat="identity") + facet_wrap(~etree) + theme_bw() +
-  #geom_text(data=keymappings, aes(feature, 0, label=key, angle=90), color="#aaaaaa", hjust=0, size=2) +
-  geom_text(data=featureDataKeyScore, aes(key, key_duration + 5, label=key, size=5+fontSize), color="#aaaaaa") +
-  geom_text(data=keyScore, aes(5, 200, label=round(normalised_key_score, digits = 2)), color="red") + 
-  geom_label(data=etreeLabels, aes(25, 150, label=label), hjust=1, lineheight=.8, size=2.5, alpha=.3, color="red") + 
-  labs(x="Feature (Key). Normalised key typicality score in red.", y = "Total duration (seconds)") + scale_y_continuous(breaks=seq(0,300,50)) +
-  theme(text = element_text(size = 10), axis.text.x = element_blank(), axis.ticks.x = element_blank(), strip.text = element_blank()) +
-  guides(size = FALSE)  
+#filter out 12 (unknown) data points before plotting
+featureDataKeyScore <- featureDataKeyScore %>% filter(key !="(unknown)")
 
-ggsave(file="rcalma.svg", plot=p, width=20, height=12)
+
+p <- ggplot(featureDataKeyScore, aes(key, key_duration)) + 
+  geom_bar(data=featureDataKeyScore, stat="identity", aes(fill=key)) + facet_wrap(~etree) + theme_bw() +
+  #geom_text(data=keymappings, aes(feature, 0, label=key, angle=90), color="#aaaaaa", hjust=0, size=2) +
+  geom_text(data=featureDataKeyScore, aes(key, key_duration + 5, label=key, size=5+fontSize), color="#555555") +
+  scale_fill_hue(l = 45) +
+  geom_label(data=etreeLabels, aes(25, 150, label=label), hjust=1, size=2.5, alpha=.6, color="black") + 
+  geom_text(data=keyScore, aes(3, 200, label=round(normalised_key_score, digits = 2)), color="red") + 
+  labs(x="Feature (Key). Normalised key typicality score in red.", y = "Total duration (seconds)", fill="Detected Key") + scale_y_continuous(breaks=seq(0,300,50)) +
+  theme(text = element_text(size = 10), axis.text.x = element_blank(), axis.ticks.x = element_blank(), strip.text = element_blank(),
+      legend.text = element_text(size = 16)) +
+  guides(size = FALSE, color = FALSE, fill=guide_legend(ncol=1))  
+
+ggsave(file="rcalma.svg", plot=p, width=20, height=9.5)
 
 # notes on preparing the output svg for javascripting in a browser:
 # to isolate only the svg rects corresponding to each etree track graph (run over file e.g. in vim):
